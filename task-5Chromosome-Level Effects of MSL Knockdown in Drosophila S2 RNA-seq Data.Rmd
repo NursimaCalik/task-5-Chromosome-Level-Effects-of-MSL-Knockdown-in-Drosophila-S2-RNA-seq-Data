@@ -1,8 +1,0 @@
----
-title: "Task-5 Chromosome-Level Effects of MSL Knockdown in Drosophila S2 RNA-seq Data"
-author: "Nursima Çalık"
-date: "2026-10-19"
-output: html_document
----
-
-

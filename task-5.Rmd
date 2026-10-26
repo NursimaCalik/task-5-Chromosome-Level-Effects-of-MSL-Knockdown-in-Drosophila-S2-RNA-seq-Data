@@ -1,0 +1,246 @@
+---
+title: "Task-5 Chromosome-Level Effects of MSL Knockdown in Drosophila S2 RNA-seq Data"
+author: "Nursima Çalık"
+date: "2026-10-19"
+output: html_document
+---
+## Import data
+```{r}
+library(plyr)
+library(readr)
+library(dplyr)
+library(arsenal)
+counts <- read.delim("data/counts.tsv", sep = "\t")
+genes <- read.delim("data/genes.tsv", sep = "\t")
+samples <- read.delim("data/samples.tsv", sep = "\t")
+tpms <- read.delim("data/tpms.tsv", sep = "\t")
+```
+
+## Examine Datasets
+```{r}
+dim(counts)
+str(counts)
+anyNA(counts)
+sum(duplicated(counts))
+
+dim(genes)
+str(genes)
+table(genes$chromosome)
+anyNA(genes)
+sum(duplicated(genes))
+
+dim(samples)
+str(samples)
+anyNA(samples)
+sum(duplicated(samples))
+
+dim(tpms)
+str(tpms)
+anyNA(tpms)
+sum(duplicated(tpms))
+
+comparedf(genes, counts, by = "flybase_gene_id")
+comparedf(genes, tpms, by = "flybase_gene_id")
+
+
+sum(counts$control_rep1 < 0, counts$control_rep2 < 0, counts$msl2_rep1 < 0, counts$msl2_rep2<0, counts$mof_rep1 <0, counts$mof_rep2 < 0, na.rm = TRUE)
+sum(tpms$control_rep1 < 0, tpms$control_rep2 < 0, tpms$msl2_rep1 < 0, tpms$msl2_rep2<0, tpms$mof_rep1 <0, tpms$mof_rep2 < 0, na.rm = TRUE)
+
+
+```
+
+## Creat SummarizedExperiment
+```{r}
+library(tidyverse)
+library(SummarizedExperiment)
+counts <- counts%>% remove_rownames %>% column_to_rownames(var="flybase_gene_id")
+str(counts)
+counts <- as.matrix(counts)
+
+tpms <- tpms%>% remove_rownames %>% column_to_rownames(var="flybase_gene_id")
+str(tpms)
+tpms <- as.matrix(tpms)
+
+genes <- genes %>% remove_rownames %>% column_to_rownames(var = "flybase_gene_id")
+samples <- samples %>% remove_rownames %>% column_to_rownames(var = "sample_id")
+
+sum(rownames(counts) %in% rownames(tpms))
+sum(rownames(genes) %in% rownames(counts))
+
+se <- SummarizedExperiment(assays = list(counts = counts, tpms = tpms), rowData = genes, colData = samples)
+
+```
+## Heuristic Analysis
+```{r}
+library(ggplot2)
+library(tibble)
+library(datarium)
+library(pheatmap)
+library(RColorBrewer)
+tpms_plot <- assay(se, "tpms")
+tpms_plot <- as.data.frame(tpms_plot)
+tpms_plot <- tibble::rownames_to_column(tpms_plot, var = "flybase_gene_id")
+tpms_longer <- pivot_longer(tpms_plot, cols = 2:7, names_to = "condition", values_to = "tpms")
+
+ggplot(data = tpms_longer, mapping = aes(x = condition, y = log10(tpms+1)))+
+  geom_boxplot(outlier.shape = NA)+
+  geom_jitter(width = 0.08,
+              height = 0)+
+  labs(title = "Difference between Various Conditions", x = "conditions", y = "log10 tpms")+
+  theme_minimal()
+
+ggplot(data = tpms_longer, mapping = aes(x=log10(tpms+1), colour = condition, fill = condition))+
+  geom_density(bw = 0.2, alpha = 0.05)+
+  labs(title = "Distribution of Tpms on Various Conditions ")+
+  theme_minimal()
+
+tpms_cor <- assay(se, "tpms")
+tpms_cor <- cor(tpms_cor)
+HeatMap <- heatmap(tpms_cor, scale = "none", symm = TRUE, margins = c(8,8)) 
+
+```
+
+## Compare msl2 and mof RNAi with the Control Condition
+```{r}
+counts_plot <- assay(se, "counts")
+counts_plot <- as.data.frame(counts_plot)
+counts_plot <- tibble::rownames_to_column(counts_plot, var = "flybase_gene_id")
+counts_longer1 <- pivot_longer(counts_plot, cols = 2:5, names_to = "condition", values_to = "counts")
+counts_longer2 <- pivot_longer(counts_plot, cols = c("control_rep1", "control_rep2", "mof_rep1", "mof_rep2"), names_to = "condition", values_to = "counts")
+ggplot(data = counts_longer1, mapping = aes(x= condition, y=log10(counts+1)))+
+  geom_boxplot()+
+  geom_jitter(width = 0.08,
+              height = 0)+
+  labs(title = "Comparison between Control and msl2 RNAi Conditions", x ="Conditions", y="Counts")+
+  theme_minimal()
+
+ggplot(data = counts_longer1, mapping = aes(x=log10(counts+1), group = condition, fill = condition))+
+  geom_density(bw = 0.4, alpha = 0.4)+
+  labs(title = "Distribution of Control and mls2 RNAi Conditions")+
+  theme_minimal()
+
+ggplot(data = counts_longer2, mapping = aes(x= condition, y=log10(counts+1)))+
+  geom_boxplot()+
+  geom_jitter(width = 0.08,
+              height = 0)+
+  labs(title = "Comparison between Control and mof RNAi Conditions", x ="Conditions", y="Counts")+
+  theme_minimal()
+
+ggplot(data = counts_longer2, mapping = aes(x=log10(counts+1), group = condition, fill = condition))+
+  geom_density(bw = 0.4, alpha = 0.4)+
+  labs(title = "Distribution of Control and mof RNAi Conditions")+
+  theme_minimal()
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+library(DESeq2)
+dds <- DESeqDataSetFromMatrix(countData = counts, colData = samples, design = ~condition)
+dds <- DESeq(dds)
+results1 <- results(dds)
+results1
+results2 <- results(dds, contrast = c("condition","mof", "control"))
+results2
+
+results1 <- as.data.frame(results1)
+results1 <- tibble::rownames_to_column(results1, var = "flybase_gene_id")
+results2 <- as.data.frame(results2)
+results2 <- tibble::rownames_to_column(results2, var = "flybase_gene_id")
+
+genes_com <- rowData(se, use.names = TRUE)
+genes_com <- as.data.frame(genes_com)
+genes_com <- tibble::rownames_to_column(genes_com, var = "flybase_gene_id")
+
+base::nrow(genes_com)
+base::nrow(results1)
+base::names(genes_com)
+base::names(results1)
+base::length(base::unique(genes_com$flybase_gene_id))
+base::length(base::unique(results1$flybase_gene_id))
+results1_com <- dplyr::left_join(x= genes_com, y= results1, by= "flybase_gene_id" )
+
+base::nrow(genes_com)
+base::nrow(results2)
+base::names(genes_com)
+base::names(results2)
+base::length(base::unique(genes_com$flybase_gene_id))
+base::length(base::unique(results2$flybase_gene_id))
+results2_com <- dplyr::left_join(x= genes_com, y= results2, by= "flybase_gene_id" )
+
+sum(is.na(results1_com$log2FoldChange))
+sum(is.na(results1_com$pvalue))
+sum(is.na(results1_com$lfcSE))
+sum(is.na(results1_com$stat))
+sum(is.na(results1_com$padj))
+
+sum(is.na(results2_com$log2FoldChange))
+sum(is.na(results2_com$pvalue))
+sum(is.na(results2_com$lfcSE))
+sum(is.na(results2_com$stat))
+sum(is.na(results2_com$padj))
+
+results1_com_cle <- filter(results1_com, !is.na(results1_com$log2FoldChange))
+results2_com_cle <- filter(results2_com, !is.na(results2_com$log2FoldChange))
+
+table(results1_com_cle$chromosome)
+table(results2_com_cle$chromosome)
+
+results1_com_cle <- results1_com_cle %>% mutate(Annotation = if_else(chromosome == "X", "X", "Autosome"))
+results2_com_cle <- results2_com_cle %>% mutate(Annotation = if_else(chromosome == "X", "X", "Autosome"))
+
+ggplot(data = results1_com_cle, mapping = aes(x = Annotation, y= log2FoldChange))+
+  geom_boxplot(outlier.shape = NA)+
+  geom_jitter(width = 0.08,
+              height = 0)+
+  labs(title = "Gene Level Expression Changes Following mls2 Knockdown : X Chromosome vs Autosome", x = "Annotation", y= "log2FoldChange")+
+  theme_minimal()
+
+ggplot(data = results1_com_cle, mapping = aes(x = log2FoldChange, colour = Annotation, fill = Annotation))+
+  geom_density(alpha = 0.4)+
+  scale_y_continuous(breaks = seq(0, 1.25, by = 0.25))+
+  scale_x_continuous(breaks = seq(-8, 8, by =2))+
+  labs(title = "Distribution of Gene Level Expression Changes Following mls2 Knockdown", x = "log2FoldChange", y =" density")+
+  theme_minimal()
+
+ggplot(data = results2_com_cle, mapping = aes(x = Annotation, y= log2FoldChange))+
+  geom_boxplot(outlier.shape = NA)+
+  geom_jitter(width = 0.08,
+              height = 0)+
+  labs(title = "Gene Level Expression Changes Following mof Knockdown : X Chromosome vs Autosome", x = "Annotation", y= "log2FoldChange")+
+  theme_minimal()
+
+ggplot(data = results2_com_cle, mapping = aes(x = log2FoldChange, colour = Annotation, fill = Annotation))+
+  geom_density(alpha = 0.4)+
+  scale_y_continuous(breaks = seq(0, 1.25, by = 0.25))+
+  scale_x_continuous(breaks = seq(-8, 8, by =2))+
+  labs(title = "Distribution of Gene Level Expression Changes Following mof Knockdown", x = "log2FoldChange", y =" density")+
+  theme_minimal() 
+
+aggregate(log2FoldChange ~ Annotation, data = results1_com_cle, FUN = mean)
+aggregate(log2FoldChange ~ Annotation, data = results2_com_cle, FUN = mean)
+aggregate(log2FoldChange ~ Annotation, data = results1_com_cle, FUN = sd)
+aggregate(log2FoldChange ~ Annotation, data = results2_com_cle, FUN = sd)
+aggregate(log2FoldChange ~ Annotation, data = results1_com_cle, FUN = median)
+aggregate(log2FoldChange ~ Annotation, data = results2_com_cle, FUN = median)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
