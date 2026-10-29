@@ -139,11 +139,13 @@ ggplot(data = tpms_longer2, mapping = aes(x=log10(tpms+1), group = condition, fi
   theme_minimal()
 ```
 ## Create DEseq Data Set and Analyze Gene-Level Expression Changes to Chromosome Annotations
-In this section, the effects of msl2 and mof knockdown on gene expression were compared with the control condition using DEseq2. DEseq accounts for differences between samples that can affect the direct comparison of read counts through normalization. Also it considers variability between replicates to estimate the direction and magnitude of expression changes for each gene relative to the control. After the results were received , they were merged with genes information such as chromosome. In the results, there were a lot of missing value. The missing values that were at log2FoldChange were filtered because these change values were used for analysis. The new annotation column was create to separate the chromosome type as X and autosome. When the plots were examined , it can be observed that in the box plots , heights of box were similar and medians of X chromosome were were at negative side of zero and closer than autosome.  Also, standard deviations were higher for autosome and difference of standard deviation at msl2 knockdown was bigger. It could be said that the variation in autosomal genes exhibited a broader distribution. In additionally , log2 Fold Change values were used for essential comparison with DEseq2. Log2 fold change is the logarithm of the ratio between two conditions. In RNA-seq, log2 fold change of 1 means expression doubled, -1 means it halved, and 0 means no estimated change. When the distributions of knockdowns were observed , At both condition, density of change was at negative side and closer to 0 for X chromosome. The calculated averages were as follows: at msl2 knockdown average autosomal log2FoldChange was -0.002162467 and average X chromosome log2FoldChange was -0.399133920 , at mof knockdown average autosomal log2FoldChange was 0.03692824 and average X chromosome log2FoldChange was -0.38410726. The command that both knockdowns more affected X chromosome.When looking at the average msl2 knockdown reduced gene expressions but especially at X chromosome , more decreasing was observed and mof knockdown increased gene expression for autosome minimally but at X chromosome , obvious increasing was observed. For quantitative results , differences between average X chromosome gene log2FoldChange were calculated. The X- specific expression effect was approximatly -0.3774 for msl2 knockdown and -0.4209 for mof knockdown. The meaning of negative value for both knockdown condition was that gene expression of X chromosome reduced more than autosome. The difference between the two knockdowns was -0.0435 and with this results, it can be said that gene expression reducing effect was stronger at mof knockdown but further statistical test is needed to determine whether the observed difference is statistically significant.[13-16]         
+In this section, the effects of msl2 and mof knockdown on gene expression were compared with the control condition using DEseq2. DEseq accounts for differences between samples that can affect the direct comparison of read counts through normalization. Also it considers variability between replicates to estimate the direction and magnitude of expression changes for each gene relative to the control. After the results were received , they were merged with genes information such as chromosome. In the results, there were a lot of missing value. The missing values that were at log2FoldChange were filtered because these change values were used for analysis. The new annotation column was create to separate the chromosome type as X and autosome. When the plots were examined , it can be observed that in the box plots , heights of box were similar and medians of X chromosome were at negative side of zero and further from zero than autosome.  Also, standard deviations were higher for autosome and difference of standard deviation at msl2 knockdown was bigger. It could be said that the variation in autosomal genes exhibited a broader distribution. In additionally , log2 Fold Change values were used for essential comparison with DEseq2. Log2 fold change is the logarithm of the ratio between two conditions. In RNA-seq, log2 fold change of 1 means expression doubled, -1 means it halved, and 0 means no estimated change. When the distributions of knockdowns were observed , At both condition, density of change was at negative side and closer to 0 for X chromosome. The calculated averages were as follows: at msl2 knockdown average autosomal log2FoldChange was -0.002162467 and average X chromosome log2FoldChange was -0.399133920 , at mof knockdown average autosomal log2FoldChange was 0.03692824 and average X chromosome log2FoldChange was -0.38410726. The command that both knockdowns more affected X chromosome.When looking at the average msl2 knockdown reduced gene expressions but especially at X chromosome , more decreasing was observed and mof knockdown increased gene expression for autosome minimally but at X chromosome , obvious decreasing was observed. For quantitative results , differences between average X- specific chromosome gene log2FoldChange were calculated. The X- specific expression effect was approximatly -0.3969715 for msl2 knockdown and  -0.4210355 for mof knockdown. The meaning of negative value for both knockdown condition was that gene expression of X chromosome reduced more than autosome. The difference between the two knockdowns was only -0.02406 log2 units when we used means. For each knockdown, the autosomal median was also subtracted from the X-linked median. The difference between these two results was even smaller, approximately −0.0015 log2 units. Therefore, we cannot confidently say that mof knockdown reduces X-linked gene expression more strongly relative to autosomal genes than msl2 knockdown. Evidence for this difference is limited. Also there were only two biological replicates per condition which is another limitation. Overall, both knockdowns showed similar effects although the calculated effect for mof was slightly more negative.
+
+it can be said that gene expression reducing effect was stronger at mof knockdown but  further statistical test is needed to determine whether the observed difference is statistically significant.[13-16,20]         
 ```{r}
 dds <- DESeqDataSetFromMatrix(countData = counts, colData = samples, design = ~condition)
 dds <- DESeq(dds)
-results1 <- results(dds)
+results1 <- results(dds, contrast = c("condition","msl2", "control"))
 results1
 results2 <- results(dds, contrast = c("condition","mof", "control"))
 results2
@@ -222,13 +224,30 @@ ggplot(data = results2_com_cle, mapping = aes(x = log2FoldChange, colour = Annot
   labs(title = "Distribution of Gene Level Expression Changes Following mof Knockdown", x = "log2FoldChange", y =" density")+
   theme_minimal() 
 
-aggregate(log2FoldChange ~ Annotation, data = results1_com_cle, FUN = mean)
-aggregate(log2FoldChange ~ Annotation, data = results2_com_cle, FUN = mean)
+msl2 <- aggregate(log2FoldChange ~ Annotation, data = results1_com_cle, FUN = mean)
+msl2
+mof <- aggregate(log2FoldChange ~ Annotation, data = results2_com_cle, FUN = mean)
+mof
 aggregate(log2FoldChange ~ Annotation, data = results1_com_cle, FUN = sd)
 aggregate(log2FoldChange ~ Annotation, data = results2_com_cle, FUN = sd)
-aggregate(log2FoldChange ~ Annotation, data = results1_com_cle, FUN = median)
-aggregate(log2FoldChange ~ Annotation, data = results2_com_cle, FUN = median)
+msl2_median <- aggregate(log2FoldChange ~ Annotation, data = results1_com_cle, FUN = median)
+msl2_median
+mof_median <- aggregate(log2FoldChange ~ Annotation, data = results2_com_cle, FUN = median)
+mof_median
 
+msl2_median_calc <- diff(msl2_median$log2FoldChange)
+msl2_median_calc
+mof_median_calc <- diff(mof_median$log2FoldChange)
+mof_median_calc
+median_diff_final <- (mof_median_calc - msl2_median_calc)
+median_diff_final
+
+msl2_calculate <- diff(msl2$log2FoldChange)
+msl2_calculate
+mof_calculate <- diff(mof$log2FoldChange)
+mof_calculate
+diff_final <- (mof_calculate - msl2_calculate)
+diff_final
 ```
 
 ## Explanations
@@ -256,6 +275,7 @@ RNA-seq measures presence , identity and quantity of RNA molecules that are in t
 17.	https://divingintogeneticsandgenomics.com/learn/glossary/count-matrix/ 
 18.	https://www.neb.com/de-de/tools-and-resources/usage-guidelines/getting-started-with-rna-seq?srsltid=AYCX9vJCSyE_LLq4tQYS8VE2w25a-DQKLwasOoyEDHmtOfBK3ltTC2Jl
 19.	https://bigomics.ch/blog/why-how-normalize-rna-seq-data/ 
+20. https://www.youtube.com/watch?v=2PY8bEb0Cm8
 
 
 
