@@ -9,3 +9,6 @@ This project compares the effects of msl2 and mof RNAi on gene expression in Dro
 
 ## Rerun
 Open "task-5.Rmd" and click "Knit" to generate the HTML report. The report includes exploratory plots, Deseq comparisons, chromosome-level gene summaries, explanations, interpretation of the results.
+
+## Published report
+Read the report online : https://nursimacalik.github.io/task-5-Chromosome-Level-Effects-of-MSL-Knockdown-in-Drosophila-S2-RNA-seq-Data/ 
