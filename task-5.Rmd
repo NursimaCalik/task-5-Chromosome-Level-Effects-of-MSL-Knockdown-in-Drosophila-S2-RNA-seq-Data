@@ -5,11 +5,21 @@ date: "2026-10-19"
 output: html_document
 ---
 ## Import data
+Files were imported and all used packages were gathered at first part of code.[1]
 ```{r}
 library(plyr)
 library(readr)
 library(dplyr)
 library(arsenal)
+library(tidyverse)
+library(SummarizedExperiment)
+library(ggplot2)
+library(tibble)
+library(datarium)
+library(pheatmap)
+library(RColorBrewer)
+library(DESeq2)
+
 counts <- read.delim("data/counts.tsv", sep = "\t")
 genes <- read.delim("data/genes.tsv", sep = "\t")
 samples <- read.delim("data/samples.tsv", sep = "\t")
@@ -17,6 +27,7 @@ tpms <- read.delim("data/tpms.tsv", sep = "\t")
 ```
 
 ## Examine Datasets
+Datasets were examined and comparison was made by gene id between counts and tpms data. It was checked whether there were any negative values.All data was tidy and matched each other. Also, there was no minus value.[2,3]
 ```{r}
 dim(counts)
 str(counts)
@@ -49,10 +60,9 @@ sum(tpms$control_rep1 < 0, tpms$control_rep2 < 0, tpms$msl2_rep1 < 0, tpms$msl2_
 
 ```
 
-## Creat SummarizedExperiment
+## Create SummarizedExperiment
+Counts matrix was generated for creating SummarizedExperiment. Firstly id column was turn to row names then with "as.matrix" function counts recorded as matrix. This process was made for other datasets. In SummarizedExperimet, Counts and tpms were used for assay, genes was used for rowData and samples was used  for colData. In addition id matches were  checked and it was controlled whether there was missing rows.[4-6]
 ```{r}
-library(tidyverse)
-library(SummarizedExperiment)
 counts <- counts%>% remove_rownames %>% column_to_rownames(var="flybase_gene_id")
 str(counts)
 counts <- as.matrix(counts)
@@ -71,12 +81,8 @@ se <- SummarizedExperiment(assays = list(counts = counts, tpms = tpms), rowData 
 
 ```
 ## Heuristic Analysis
+Tpms matrix was extracted from SummarizedExperiment. It was turned to data frame again and rendered longer for visualization. So all conditions were collected one column named condition. Box plot and jitter were used for plotting. In this part y axis values were turned log10(tpms + 1) because of wide range of tpms(+1 was used for calculating 0 values). Additionally density plot was used for distribution. when the box and density plot were analyzed , it can be said that there was similar results like medians or width of box at first look. Also Density plots overlapped considerably but clear command can not be made. Because these plots showed all genes distribution and it could not be understood how same genes changed at different conditions. Distribution could be similar when an expression of gene increased and another expression of gene decreased. So it can be said that general tpm distribution can be similar between conditions but it was not directly showed change of genes. [7-10] Another point was correlation. correlation matrix was created and it was used for heat map. The samples were not clearly clustered according to their conditions. Replicates of the same condition were not always the samples most similar to one another; some samples from different conditions had shown a closer resemblance.[11,12] 
 ```{r}
-library(ggplot2)
-library(tibble)
-library(datarium)
-library(pheatmap)
-library(RColorBrewer)
 tpms_plot <- assay(se, "tpms")
 tpms_plot <- as.data.frame(tpms_plot)
 tpms_plot <- tibble::rownames_to_column(tpms_plot, var = "flybase_gene_id")
@@ -89,9 +95,11 @@ ggplot(data = tpms_longer, mapping = aes(x = condition, y = log10(tpms+1)))+
   labs(title = "Difference between Various Conditions", x = "conditions", y = "log10 tpms")+
   theme_minimal()
 
+aggregate(tpms ~ condition, data = tpms_longer, FUN = mean)
+
 ggplot(data = tpms_longer, mapping = aes(x=log10(tpms+1), colour = condition, fill = condition))+
   geom_density(bw = 0.2, alpha = 0.05)+
-  labs(title = "Distribution of Tpms on Various Conditions ")+
+  labs(title = "Distribution of Tpms on Various Conditions ", x = "Tpms", y = "Density")+
   theme_minimal()
 
 tpms_cor <- assay(se, "tpms")
@@ -101,39 +109,38 @@ HeatMap <- heatmap(tpms_cor, scale = "none", symm = TRUE, margins = c(8,8))
 ```
 
 ## Compare msl2 and mof RNAi with the Control Condition
+Longer version of data was separated into 2 groups for comparison. "tpms_longer" was general comparison of msl2 RNAi and control conditions. When the drawn plots were analyzed , it can be said that results of comparison of msl2 and mof RNAi with the control condition were similar to each other. It was seen that especially in density plot results overlapped clearly. This result was not to say that effects of msl2 and mof were similar or genes changed individually because this result showed distribution of expression value of all genes in every examples.
 ```{r}
-counts_plot <- assay(se, "counts")
-counts_plot <- as.data.frame(counts_plot)
-counts_plot <- tibble::rownames_to_column(counts_plot, var = "flybase_gene_id")
-counts_longer1 <- pivot_longer(counts_plot, cols = 2:5, names_to = "condition", values_to = "counts")
-counts_longer2 <- pivot_longer(counts_plot, cols = c("control_rep1", "control_rep2", "mof_rep1", "mof_rep2"), names_to = "condition", values_to = "counts")
-ggplot(data = counts_longer1, mapping = aes(x= condition, y=log10(counts+1)))+
+tpms_longer1 <- pivot_longer(tpms_plot, cols = 2:5, names_to = "condition", values_to = "tpms")
+tpms_longer2 <- pivot_longer(tpms_plot, cols = c("control_rep1", "control_rep2", "mof_rep1", "mof_rep2"), names_to = "condition", values_to = "tpms")
+
+ggplot(data = tpms_longer1, mapping = aes(x= condition, y=log10(tpms+1)))+
   geom_boxplot()+
   geom_jitter(width = 0.08,
               height = 0)+
-  labs(title = "Comparison between Control and msl2 RNAi Conditions", x ="Conditions", y="Counts")+
+  labs(title = "Comparison between Control and msl2 RNAi Conditions", x ="Conditions", y="tpms")+
   theme_minimal()
 
-ggplot(data = counts_longer1, mapping = aes(x=log10(counts+1), group = condition, fill = condition))+
+ggplot(data = tpms_longer1, mapping = aes(x=log10(tpms+1), group = condition, fill = condition))+
   geom_density(bw = 0.4, alpha = 0.4)+
-  labs(title = "Distribution of Control and mls2 RNAi Conditions")+
+  labs(title = "Distribution of Control and msl2 RNAi Conditions", x = "Tpms", y ="density")+
   theme_minimal()
 
-ggplot(data = counts_longer2, mapping = aes(x= condition, y=log10(counts+1)))+
+ggplot(data = tpms_longer2, mapping = aes(x= condition, y=log10(tpms+1)))+
   geom_boxplot()+
   geom_jitter(width = 0.08,
               height = 0)+
   labs(title = "Comparison between Control and mof RNAi Conditions", x ="Conditions", y="Counts")+
   theme_minimal()
 
-ggplot(data = counts_longer2, mapping = aes(x=log10(counts+1), group = condition, fill = condition))+
+ggplot(data = tpms_longer2, mapping = aes(x=log10(tpms+1), group = condition, fill = condition))+
   geom_density(bw = 0.4, alpha = 0.4)+
-  labs(title = "Distribution of Control and mof RNAi Conditions")+
+  labs(title = "Distribution of Control and mof RNAi Conditions", x = "Tpms", y ="density")+
   theme_minimal()
-if (!require("BiocManager", quietly = TRUE))
-    install.packages("BiocManager")
-
-library(DESeq2)
+```
+## Create DEseq Data Set and Analyze Gene-Level Expression Changes to Chromosome Annotations
+In this section, the effects of msl2 and mof knockdown on gene expression were compared with the control condition using DEseq2. DEseq accounts for differences between samples that can affect the direct comparison of read counts through normalization. Also it considers variability between replicates to estimate the direction and magnitude of expression changes for each gene relative to the control. After the results were received , they were merged with genes information such as chromosome. In the results, there were a lot of missing value. The missing values that were at log2FoldChange were filtered because these change values were used for analysis. The new annotation column was create to separate the chromosome type as X and autosome. When the plots were examined , it can be observed that in the box plots , heights of box were similar and medians of X chromosome were were at negative side of zero and closer than autosome.  Also, standard deviations were higher for autosome and difference of standard deviation at msl2 knockdown was bigger. It could be said that the variation in autosomal genes exhibited a broader distribution. In additionally , log2 Fold Change values were used for essential comparison with DEseq2. Log2 fold change is the logarithm of the ratio between two conditions. In RNA-seq, log2 fold change of 1 means expression doubled, -1 means it halved, and 0 means no estimated change. When the distributions of knockdowns were observed , At both condition, density of change was at negative side and closer to 0 for X chromosome. The calculated averages were as follows: at msl2 knockdown average autosomal log2FoldChange was -0.002162467 and average X chromosome log2FoldChange was -0.399133920 , at mof knockdown average autosomal log2FoldChange was 0.03692824 and average X chromosome log2FoldChange was -0.38410726. The command that both knockdowns more affected X chromosome.When looking at the average msl2 knockdown reduced gene expressions but especially at X chromosome , more decreasing was observed and mof knockdown increased gene expression for autosome minimally but at X chromosome , obvious increasing was observed. For quantitative results , differences between average X chromosome gene log2FoldChange were calculated. The X- specific expression effect was approximatly -0.3774 for msl2 knockdown and -0.4209 for mof knockdown. The meaning of negative value for both knockdown condition was that gene expression of X chromosome reduced more than autosome. The difference between the two knockdowns was -0.0435 and with this results, it can be said that gene expression reducing effect was stronger at mof knockdown but further statistical test is needed to determine whether the observed difference is statistically significant.[13-16]         
+```{r}
 dds <- DESeqDataSetFromMatrix(countData = counts, colData = samples, design = ~condition)
 dds <- DESeq(dds)
 results1 <- results(dds)
@@ -191,14 +198,14 @@ ggplot(data = results1_com_cle, mapping = aes(x = Annotation, y= log2FoldChange)
   geom_boxplot(outlier.shape = NA)+
   geom_jitter(width = 0.08,
               height = 0)+
-  labs(title = "Gene Level Expression Changes Following mls2 Knockdown : X Chromosome vs Autosome", x = "Annotation", y= "log2FoldChange")+
+  labs(title = "Gene Level Expression Changes Following msl2 Knockdown : X Chromosome vs Autosome", x = "Annotation", y= "log2FoldChange")+
   theme_minimal()
 
 ggplot(data = results1_com_cle, mapping = aes(x = log2FoldChange, colour = Annotation, fill = Annotation))+
   geom_density(alpha = 0.4)+
   scale_y_continuous(breaks = seq(0, 1.25, by = 0.25))+
   scale_x_continuous(breaks = seq(-8, 8, by =2))+
-  labs(title = "Distribution of Gene Level Expression Changes Following mls2 Knockdown", x = "log2FoldChange", y =" density")+
+  labs(title = "Distribution of Gene Level Expression Changes Following msl2 Knockdown", x = "log2FoldChange", y =" density")+
   theme_minimal()
 
 ggplot(data = results2_com_cle, mapping = aes(x = Annotation, y= log2FoldChange))+
@@ -222,8 +229,33 @@ aggregate(log2FoldChange ~ Annotation, data = results2_com_cle, FUN = sd)
 aggregate(log2FoldChange ~ Annotation, data = results1_com_cle, FUN = median)
 aggregate(log2FoldChange ~ Annotation, data = results2_com_cle, FUN = median)
 
-
 ```
+
+## Explanations
+RNA-seq measures presence , identity and quantity of RNA molecules that are in the biological sample.It is widely used for gene expression analysis, including detection of mutations, alternative splicing, and post-transcriptional modifications. The result measurements can be represented in a count matrix. A count matrix is a table of non negative integers where each row is a gene  and each column is a sample that is in bulk RNA-seq or a single cell. Each entry demonstrates the number of sequencing reads or unique molecules assigned to that gene in that sample or cell. Before comparing these values across samples, normalization needs to be considered. RNA-seq normalization is essential for accurate RNA-seq data analysis. Various factors affect transcript quantification in RNA-seq data such as sequencing depth, transcript length, sample and batch variability. Normalization methods exist to minimize these variables and ensure reliable transcriptomic data. TPM (Transcripts per million) and RPKM(reads per kilobase of transcript per million reads mapped) are examples of normalized expression values. both of them account for gene lenght and sequencing depth. They describe the relative expression level of a gene rather than the exact number of RNA molecules.[17-19]
+ 
+
+## Resources
+
+1.	https://www.geeksforgeeks.org/r-language/how-to-import-tsv-files-into-r/#google_vignette
+2.	https://www.r-bloggers.com/2021/06/compare-data-frames-in-r-quick-guide/
+3.	https://www.r-bloggers.com/2021/07/countif-function-in-r/ 
+4.	https://www.youtube.com/watch?v=LtYoJP0L0rk
+5.	https://www.rdocumentation.org/packages/SummarizedExperiment/versions/1.2.3/topics/SummarizedExperiment-class 
+6.	https://bioconductor.org/packages/release/bioc/html/SummarizedExperiment.html
+7.	https://www.reddit.com/r/Rlanguage/comments/z71jk8/converting_a_dataframe_from_wide_to_long_format/ 
+8.	https://www.youtube.com/watch?v=UR-4vBEN3Fw
+9.	https://stackoverflow.com/questions/29511215/how-can-i-convert-row-names-into-the-first-column
+10.	https://www.youtube.com/watch?v=CftlEnJz2ws
+11.	https://www.youtube.com/watch?v=6mw5OYLji9c
+12.	https://www.youtube.com/watch?v=xerW2TvZHbQ
+13.	https://www.youtube.com/watch?v=OzNzO8qwwp0&t=341s
+14.	https://www.researchgate.net/post/How-to-interpret-results-of-DESeq2-with-more-than-two-experimental-groups
+15.	https://bioconductor.org/packages/devel/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#differential-expression-analysis
+16. https://notchbio.app/blog/log2-fold-change-cutoffs-rna-seq/
+17.	https://divingintogeneticsandgenomics.com/learn/glossary/count-matrix/ 
+18.	https://www.neb.com/de-de/tools-and-resources/usage-guidelines/getting-started-with-rna-seq?srsltid=AYCX9vJCSyE_LLq4tQYS8VE2w25a-DQKLwasOoyEDHmtOfBK3ltTC2Jl
+19.	https://bigomics.ch/blog/why-how-normalize-rna-seq-data/ 
 
 
 
